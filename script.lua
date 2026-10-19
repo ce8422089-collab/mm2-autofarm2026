@@ -5,14 +5,14 @@ local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
--- CONFIGURACIÓN SIMPLE Y SEGURA
+-- CONFIGURACIÓN SEGURA
 local AutofarmActivo = false
 local AntiAfkActivo = true
 local VELOCIDAD_SEGURA = 19
 local MonedasRonda = 0
 local MonedasTotales = 0
 
--- ANTI-AFK AUTOMÁTICO
+-- ANTI-AFK
 LocalPlayer.Idled:Connect(function()
     if AntiAfkActivo then
         VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
@@ -21,7 +21,7 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- CREACIÓN DE LA INTERFAZ (HALLOWEEN 🎃)
+-- INTERFAZ VISUAL HALLOWEEN 🎃
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2_Halloween_Farm"
 ScreenGui.ResetOnSpawn = false
@@ -59,7 +59,7 @@ local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
 TitleCorner.Parent = Title
 
--- Botón 1: Autofarm
+-- Botón 1: Farm
 local ToggleButton = Instance.new("TextButton")
 ToggleButton.Name = "ToggleButton"
 ToggleButton.Size = UDim2.new(0, 180, 0, 35)
@@ -91,7 +91,7 @@ local BtnCorner2 = Instance.new("UICorner")
 BtnCorner2.CornerRadius = UDim.new(0, 6)
 BtnCorner2.Parent = AfkButton
 
--- Texto de Monedas Recolectadas (Infinito)
+-- Texto de Monedas Recolectadas
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Name = "StatusLabel"
 StatusLabel.Size = UDim2.new(0, 180, 0, 25)
@@ -119,10 +119,10 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(1, 0)
 CloseCorner.Parent = CloseButton
 
--- Botón Flotante para reabrir el menú
+-- Botón Flotante para reabrir
 local OpenButton = Instance.new("TextButton")
 OpenButton.Name = "OpenButton"
-OpenButton.Size = UDim2.new(0, 50, 0, 30)
+OpenButton.Size = UDim2.new(0, 60, 0, 30)
 OpenButton.Position = UDim2.new(0, 10, 0, 10)
 OpenButton.BackgroundColor3 = Color3.fromRGB(230, 90, 0)
 OpenButton.Text = "🎃 Abrir"
@@ -136,18 +136,28 @@ local OpenCorner = Instance.new("UICorner")
 OpenCorner.CornerRadius = UDim.new(0, 6)
 OpenCorner.Parent = OpenButton
 
--- BÚSQUEDA DE MONEDAS
+-- BÚSQUEDA DE MONEDAS EN CARPETAS REALES DE MM2
 local function obtenerMonedas()
     local monedas = {}
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if (obj.Name == "Coin_Token" or obj.Name == "Coin") and obj:IsA("BasePart") then
-            table.insert(monedas, obj)
+    local contenedores = {
+        Workspace:FindFirstChild("Normal"),
+        Workspace:FindFirstChild("Map"),
+        Workspace
+    }
+    
+    for _, contenedor in pairs(contenedores) do
+        if contenedor then
+            for _, obj in pairs(contenedor:GetDescendants()) do
+                if (obj.Name == "Coin_Token" or obj.Name == "Coin" or obj.Name == "Candy_Token") and obj:IsA("BasePart") then
+                    table.insert(monedas, obj)
+                end
+            end
         end
     end
     return monedas
 end
 
--- BUCLE PRINCIPAL DE MOVIMIENTO DIRECTO (PASO A PASO)
+-- BUCLE PRINCIPAL DE RECOLECCIÓN
 task.spawn(function()
     while true do
         task.wait(0.1)
@@ -165,26 +175,27 @@ task.spawn(function()
                         if MonedasRonda >= 50 then break end
                         
                         if coin and coin.Parent then
-                            -- Movimiento directo y fluido hacia la moneda
+                            -- Movimiento directo a la moneda
                             while coin and coin.Parent and AutofarmActivo and hum.Health > 0 do
-                                local dist = (root.Position - coin.Position).Magnitude
-                                if dist <= 3 then
+                                local posMoneda = coin.Position
+                                local dist = (root.Position - posMoneda).Magnitude
+                                
+                                if dist <= 3.5 then
                                     MonedasRonda = MonedasRonda + 1
                                     MonedasTotales = MonedasTotales + 1
                                     StatusLabel.Text = "🍬 Recolectadas: " .. MonedasTotales
                                     break
                                 end
                                 
-                                -- Avanza progresivamente según la velocidad segura
-                                local dir = (coin.Position - root.Position).Unit
-                                root.CFrame = root.CFrame + (dir * (VELOCIDAD_SEGURA * 0.03))
+                                local dir = (posMoneda - root.Position).Unit
+                                root.CFrame = CFrame.new(root.Position + (dir * (VELOCIDAD_SEGURA * 0.03)), posMoneda)
                                 RunService.Heartbeat:Wait()
                             end
                         end
                     end
                 end
                 
-                -- AUTO-RESET AL JUNTAR 50 MONEDAS EN LA MISMA VIDA
+                -- RESPAWN AUTOMÁTICO AL LLEGAR A 50 EN LA RONDA
                 if MonedasRonda >= 50 and hum.Health > 0 then
                     MonedasRonda = 0
                     hum.Health = 0
@@ -200,7 +211,7 @@ LocalPlayer.CharacterAdded:Connect(function()
     MonedasRonda = 0
 end)
 
--- LÓGICA DE BOTONES
+-- INTERACCIÓN DE BOTONES
 ToggleButton.MouseButton1Click:Connect(function()
     AutofarmActivo = not AutofarmActivo
     if AutofarmActivo then
