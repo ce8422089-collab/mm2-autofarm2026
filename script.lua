@@ -1,19 +1,18 @@
 -- SERVICIOS DE ROBLOX
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
 -- CONFIGURACIÓN SIMPLE Y SEGURA
 local AutofarmActivo = false
 local AntiAfkActivo = true
-local VELOCIDAD_SEGURA = 20
-local LIMITE_MONEDAS = 50
-local monedasRecolectadas = 0
+local VELOCIDAD_SEGURA = 19
+local MonedasRonda = 0
+local MonedasTotales = 0
 
--- ANTI-AFK
+-- ANTI-AFK AUTOMÁTICO
 LocalPlayer.Idled:Connect(function()
     if AntiAfkActivo then
         VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
@@ -22,17 +21,12 @@ LocalPlayer.Idled:Connect(function()
     end
 end)
 
--- RESETEAR CONTADOR AL RESPAWNEAR
-LocalPlayer.CharacterAdded:Connect(function()
-    monedasRecolectadas = 0
-end)
-
--- INTERFAZ CON ESTILO HALLOWEEN 🎃
+-- CREACIÓN DE LA INTERFAZ (HALLOWEEN 🎃)
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MM2_Halloween_Autofarm"
+ScreenGui.Name = "MM2_Halloween_Farm"
 ScreenGui.ResetOnSpawn = false
 
-pcall(function() ScreenGui.Parent = CoreGui end)
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 -- Marco Principal
@@ -40,7 +34,7 @@ local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 220, 0, 180)
 MainFrame.Position = UDim2.new(0.5, -110, 0.4, -90)
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 25) -- Morado noche de Halloween
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 15, 30)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -54,7 +48,7 @@ FrameCorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Name = "Title"
 Title.Size = UDim2.new(1, 0, 0, 40)
-Title.BackgroundColor3 = Color3.fromRGB(230, 90, 0) -- Naranja Calabaza
+Title.BackgroundColor3 = Color3.fromRGB(230, 90, 0)
 Title.Text = "🎃 MM2 HALLOWEEN 🦇"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.SourceSansBold
@@ -97,13 +91,13 @@ local BtnCorner2 = Instance.new("UICorner")
 BtnCorner2.CornerRadius = UDim.new(0, 6)
 BtnCorner2.Parent = AfkButton
 
--- Texto de Monedas / Estado
+-- Texto de Monedas Recolectadas (Infinito)
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Name = "StatusLabel"
 StatusLabel.Size = UDim2.new(0, 180, 0, 25)
 StatusLabel.Position = UDim2.new(0, 20, 0, 140)
 StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "🍬 Monedas: 0 / 50"
+StatusLabel.Text = "🍬 Recolectadas: 0"
 StatusLabel.TextColor3 = Color3.fromRGB(255, 170, 0)
 StatusLabel.Font = Enum.Font.SourceSansBold
 StatusLabel.TextSize = 14
@@ -125,69 +119,88 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(1, 0)
 CloseCorner.Parent = CloseButton
 
--- BÚSQUEDA Y MOVIMIENTO SIMPLE
+-- Botón Flotante para reabrir el menú
+local OpenButton = Instance.new("TextButton")
+OpenButton.Name = "OpenButton"
+OpenButton.Size = UDim2.new(0, 50, 0, 30)
+OpenButton.Position = UDim2.new(0, 10, 0, 10)
+OpenButton.BackgroundColor3 = Color3.fromRGB(230, 90, 0)
+OpenButton.Text = "🎃 Abrir"
+OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenButton.Font = Enum.Font.SourceSansBold
+OpenButton.TextSize = 12
+OpenButton.Visible = false
+OpenButton.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(0, 6)
+OpenCorner.Parent = OpenButton
+
+-- BÚSQUEDA DE MONEDAS
 local function obtenerMonedas()
     local monedas = {}
-    for _, objeto in pairs(Workspace:GetDescendants()) do
-        if (objeto.Name == "Coin_Token" or objeto.Name == "Coin") and objeto:IsA("BasePart") then
-            table.insert(monedas, objeto)
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if (obj.Name == "Coin_Token" or obj.Name == "Coin") and obj:IsA("BasePart") then
+            table.insert(monedas, obj)
         end
     end
     return monedas
 end
 
-local function irAMoneda(posicion)
-    local personaje = LocalPlayer.Character
-    if not personaje then return end
-    local root = personaje:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local distancia = (root.Position - posicion).Magnitude
-    local tiempo = distancia / VELOCIDAD_SEGURA
-    
-    local info = TweenInfo.new(tiempo, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(root, info, {CFrame = CFrame.new(posicion)})
-    tween:Play()
-    tween.Completed:Wait()
-end
-
--- BUCLE PRINCIPAL SIMPLE
+-- BUCLE PRINCIPAL DE MOVIMIENTO DIRECTO (PASO A PASO)
 task.spawn(function()
-    while task.wait(0.5) do
+    while true do
+        task.wait(0.1)
         if AutofarmActivo then
-            local personaje = LocalPlayer.Character
-            local humanoid = personaje and personaje:FindFirstChildOfClass("Humanoid")
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
             
-            if personaje and humanoid and humanoid.Health > 0 then
+            if char and root and hum and hum.Health > 0 then
                 local lista = obtenerMonedas()
                 
                 if #lista > 0 then
-                    for _, moneda in pairs(lista) do
+                    for _, coin in pairs(lista) do
                         if not AutofarmActivo then break end
-                        if monedasRecolectadas >= LIMITE_MONEDAS then break end
+                        if MonedasRonda >= 50 then break end
                         
-                        if moneda and moneda.Parent then
-                            irAMoneda(moneda.Position)
-                            monedasRecolectadas = monedasRecolectadas + 1
-                            StatusLabel.Text = "🍬 Monedas: " .. monedasRecolectadas .. " / " .. LIMITE_MONEDAS
-                            task.wait(0.1)
+                        if coin and coin.Parent then
+                            -- Movimiento directo y fluido hacia la moneda
+                            while coin and coin.Parent and AutofarmActivo and hum.Health > 0 do
+                                local dist = (root.Position - coin.Position).Magnitude
+                                if dist <= 3 then
+                                    MonedasRonda = MonedasRonda + 1
+                                    MonedasTotales = MonedasTotales + 1
+                                    StatusLabel.Text = "🍬 Recolectadas: " .. MonedasTotales
+                                    break
+                                end
+                                
+                                -- Avanza progresivamente según la velocidad segura
+                                local dir = (coin.Position - root.Position).Unit
+                                root.CFrame = root.CFrame + (dir * (VELOCIDAD_SEGURA * 0.03))
+                                RunService.Heartbeat:Wait()
+                            end
                         end
                     end
                 end
                 
-                -- AUTO-RESET AL LLEGAR A 50
-                if AutofarmActivo and monedasRecolectadas >= LIMITE_MONEDAS then
-                    humanoid.Health = 0
-                    monedasRecolectadas = 0
-                    StatusLabel.Text = "🍬 Monedas: 0 / 50"
-                    repeat task.wait() until LocalPlayer.Character ~= personaje
+                -- AUTO-RESET AL JUNTAR 50 MONEDAS EN LA MISMA VIDA
+                if MonedasRonda >= 50 and hum.Health > 0 then
+                    MonedasRonda = 0
+                    hum.Health = 0
+                    repeat task.wait() until LocalPlayer.Character ~= char
                 end
             end
         end
     end
 end)
 
--- EVENTOS DE BOTONES
+-- RESETEAR CONTADOR DE RONDA AL RESPAWNEAR
+LocalPlayer.CharacterAdded:Connect(function()
+    MonedasRonda = 0
+end)
+
+-- LÓGICA DE BOTONES
 ToggleButton.MouseButton1Click:Connect(function()
     AutofarmActivo = not AutofarmActivo
     if AutofarmActivo then
@@ -211,6 +224,11 @@ AfkButton.MouseButton1Click:Connect(function()
 end)
 
 CloseButton.MouseButton1Click:Connect(function()
-    AutofarmActivo = false
-    ScreenGui:Destroy()
+    MainFrame.Visible = false
+    OpenButton.Visible = true
+end)
+
+OpenButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    OpenButton.Visible = false
 end)
